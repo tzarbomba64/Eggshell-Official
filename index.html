@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Eggshell)</title>
+  <title>Eggshell</title>
   <style>
     body { background-color: #000; color: #fff; font-family: sans-serif; padding: 2rem; line-height: 1.6; }
     h2 { color: #00aaff; margin-top: 2rem; }
@@ -75,17 +75,15 @@
         .then(res => res.ok ? res.json() : Promise.reject(res.status))
         .then(items => {
           const normal = [];
-          let baseItem = null;
+          const installers = [];
 
           items.forEach(item => {
-            if (item.type === 'file' || item.type === 'dir') {
-              const nameKey = item.name.toLowerCase();
-              if (nameKey === 'base' || nameKey === 'base.zip') baseItem = item;
-              else normal.push(item);
-            }
+            const nameKey = item.name.toLowerCase();
+            if (nameKey.includes('base')) installers.push(item);
+            else normal.push(item);
           });
 
-          // Create buttons for normal files first
+          // Create buttons for normal (zip) files first
           normal.forEach(item => {
             const label = item.name.replace(/\.[^/.]+$/, '');
             const btn = document.createElement('button');
@@ -95,28 +93,29 @@
             downloadsEl.appendChild(btn);
           });
 
-          // Then base installer button right after
-          if (baseItem) {
+          // Then installer buttons for any "base" items
+          installers.forEach(item => {
+            const label = item.name.replace(/\.[^/.]+$/, '');
             const btn = document.createElement('button');
             btn.className = 'download-btn';
-            btn.innerHTML = `<img src="${winLogoUrl}" alt="Windows logo">Download Windows installer`;
-            btn.onclick = () => zipAndDownload(baseItem);
+            btn.innerHTML = `<img src="${winLogoUrl}" alt="Windows logo">Download ${label}`;
+            btn.onclick = () => downloadDirect(item);
             downloadsEl.appendChild(btn);
-          }
+          });
         })
         .catch(err => showError('Failed to load downloads: ' + err));
 
-      // Zip and download logic
+      // Zip download logic
       function addEntry(item, zipObj, path = '') {
         if (item.type === 'file') {
           return fetch(item.download_url)
-            .then(res => (res.ok ? res.blob() : Promise.reject(res.status)))
+            .then(res => res.ok ? res.blob() : Promise.reject(res.status))
             .then(blob => zipObj.file(path + item.name, blob));
         } else if (item.type === 'dir') {
           const dir = zipObj.folder(item.name);
           const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${item.path}?ref=${branch}`;
           return fetch(apiUrl, { headers: { 'Accept': 'application/vnd.github.v3+json' } })
-            .then(res => (res.ok ? res.json() : Promise.reject(res.status)))
+            .then(res => res.ok ? res.json() : Promise.reject(res.status))
             .then(children => Promise.all(children.map(child => addEntry(child, dir, path + item.name + '/'))));
         }
       }
@@ -138,6 +137,17 @@
           })
           .catch(err => showError('Zip or download failed: ' + err));
       }
+
+      // Direct download for installers
+      function downloadDirect(item) {
+        const a = document.createElement('a');
+        a.href = item.download_url;
+        a.download = item.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+
     });
   </script>
 </body>
