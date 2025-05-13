@@ -20,11 +20,7 @@
       font-size: 0.9rem;
       text-decoration: none;
     }
-    .download-btn img {
-      width: 20px;
-      height: 20px;
-      margin-right: 8px;
-    }
+    .download-btn img { width: 20px; height: 20px; margin-right: 8px; }
     .download-btn:hover { background-color: #0088cc; }
     .error {
       margin-top: 2rem;
@@ -74,16 +70,14 @@
       fetch(listApiUrl, { headers: { 'Accept': 'application/vnd.github.v3+json' } })
         .then(res => res.ok ? res.json() : Promise.reject(res.status))
         .then(items => {
-          const normal = [];
-          const installers = [];
+          // Only include files in 'list' folder
+          const files = items.filter(item => item.type === 'file');
 
-          items.forEach(item => {
-            const nameKey = item.name.toLowerCase();
-            if (nameKey.includes('base')) installers.push(item);
-            else normal.push(item);
-          });
+          // Split into installers (containing 'base') and normal zips
+          const installers = files.filter(item => item.name.toLowerCase().includes('base'));
+          const normal = files.filter(item => !item.name.toLowerCase().includes('base'));
 
-          // Create buttons for normal (zip) files first
+          // Create zip download buttons for normal files
           normal.forEach(item => {
             const label = item.name.replace(/\.[^/.]+$/, '');
             const btn = document.createElement('button');
@@ -93,7 +87,7 @@
             downloadsEl.appendChild(btn);
           });
 
-          // Then installer buttons for any "base" items
+          // Create direct download buttons for installers
           installers.forEach(item => {
             const label = item.name.replace(/\.[^/.]+$/, '');
             const btn = document.createElement('button');
@@ -105,25 +99,15 @@
         })
         .catch(err => showError('Failed to load downloads: ' + err));
 
-      // Zip download logic
-      function addEntry(item, zipObj, path = '') {
-        if (item.type === 'file') {
-          return fetch(item.download_url)
-            .then(res => res.ok ? res.blob() : Promise.reject(res.status))
-            .then(blob => zipObj.file(path + item.name, blob));
-        } else if (item.type === 'dir') {
-          const dir = zipObj.folder(item.name);
-          const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${item.path}?ref=${branch}`;
-          return fetch(apiUrl, { headers: { 'Accept': 'application/vnd.github.v3+json' } })
-            .then(res => res.ok ? res.json() : Promise.reject(res.status))
-            .then(children => Promise.all(children.map(child => addEntry(child, dir, path + item.name + '/'))));
-        }
-      }
-
+      // Zip download logic for single files
       function zipAndDownload(item) {
         const zip = new JSZip();
-        addEntry(item, zip)
-          .then(() => zip.generateAsync({ type: 'blob', mimeType: 'application/zip' }))
+        fetch(item.download_url)
+          .then(res => res.ok ? res.blob() : Promise.reject(res.status))
+          .then(blob => {
+            zip.file(item.name, blob);
+            return zip.generateAsync({ type: 'blob', mimeType: 'application/zip' });
+          })
           .then(blob => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -138,7 +122,7 @@
           .catch(err => showError('Zip or download failed: ' + err));
       }
 
-      // Direct download for installers
+      // Direct download for installer files
       function downloadDirect(item) {
         const a = document.createElement('a');
         a.href = item.download_url;
@@ -147,7 +131,6 @@
         a.click();
         a.remove();
       }
-
     });
   </script>
 </body>
