@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PythonPackager 👍)</title>
+  <style>
+    body { background-color: #000; color: #fff; font-family: sans-serif; padding: 2rem; line-height: 1.6; }
+    h2 { color: #00aaff; margin-top: 2rem; }
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      background-color: #00aaff;
+      color: #fff;
+      padding: 0.5em 1em;
+      border: none;
+      border-radius: 4px;
+      margin: 0.5em;
+      cursor: pointer;
+      font-size: 0.9rem;
+      text-decoration: none;
+    }
+    .download-btn img {
+      width: 20px;
+      height: 20px;
+      margin-right: 8px;
+    }
+    .download-btn:hover { background-color: #0088cc; }
+    .error {
+      margin-top: 2rem;
+      padding: 1rem;
+      background-color: #330000;
+      border: 1px solid #ff0000;
+      border-radius: 4px;
+      color: #ff5555;
+    }
+  </style>
+</head>
+<body>
+  <div id="content">Loading README...</div>
+  <h2>Downloads</h2>
+  <div id="downloads"></div>
+  <div id="error" class="error" style="display:none;"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip/dist/jszip.min.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const owner = 'tzarbomba64';
+      const repo = 'PythonPackager';
+      const branch = 'main';
+      const readmeUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/README.md`;
+      const listApiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/list?ref=${branch}`;
+      const winLogoUrl = 'https://i.postimg.cc/2jJkfTC9/download.png';
+
+      const contentEl = document.getElementById('content');
+      const downloadsEl = document.getElementById('downloads');
+      const errorEl = document.getElementById('error');
+
+      function showError(msg) {
+        errorEl.style.display = 'block';
+        errorEl.textContent = msg;
+        console.error(msg);
+      }
+
+      // Load README
+      fetch(readmeUrl)
+        .then(res => res.ok ? res.text() : Promise.reject(res.status))
+        .then(md => contentEl.innerHTML = marked.parse(md))
+        .catch(err => showError('Failed to load README: ' + err));
+
+      // Fetch list folder and prepare buttons
+      fetch(listApiUrl, { headers: { 'Accept': 'application/vnd.github.v3+json' } })
+        .then(res => res.ok ? res.json() : Promise.reject(res.status))
+        .then(items => {
+          const normal = [];
+          let baseItem = null;
+
+          items.forEach(item => {
+            if (item.type === 'file' || item.type === 'dir') {
+              const nameKey = item.name.toLowerCase();
+              if (nameKey === 'base' || nameKey === 'base.zip') baseItem = item;
+              else normal.push(item);
+            }
+          });
+
+          // Create buttons for normal files first
+          normal.forEach(item => {
+            const label = item.name.replace(/\.[^/.]+$/, '');
+            const btn = document.createElement('button');
+            btn.className = 'download-btn';
+            btn.textContent = `Download ${label}.zip`;
+            btn.onclick = () => zipAndDownload(item);
+            downloadsEl.appendChild(btn);
+          });
+
+          // Then base installer button right after
+          if (baseItem) {
+            const btn = document.createElement('button');
+            btn.className = 'download-btn';
+            btn.innerHTML = `<img src="${winLogoUrl}" alt="Windows logo">Download Windows installer`;
+            btn.onclick = () => zipAndDownload(baseItem);
+            downloadsEl.appendChild(btn);
+          }
+        })
+        .catch(err => showError('Failed to load downloads: ' + err));
+
+      // Zip and download logic
+      function addEntry(item, zipObj, path = '') {
+        if (item.type === 'file') {
+          return fetch(item.download_url)
+            .then(res => (res.ok ? res.blob() : Promise.reject(res.status)))
+            .then(blob => zipObj.file(path + item.name, blob));
+        } else if (item.type === 'dir') {
+          const dir = zipObj.folder(item.name);
+          const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${item.path}?ref=${branch}`;
+          return fetch(apiUrl, { headers: { 'Accept': 'application/vnd.github.v3+json' } })
+            .then(res => (res.ok ? res.json() : Promise.reject(res.status)))
+            .then(children => Promise.all(children.map(child => addEntry(child, dir, path + item.name + '/'))));
+        }
+      }
+
+      function zipAndDownload(item) {
+        const zip = new JSZip();
+        addEntry(item, zip)
+          .then(() => zip.generateAsync({ type: 'blob', mimeType: 'application/zip' }))
+          .then(blob => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const name = item.name.replace(/\.[^/.]+$/, '');
+            a.download = `${name}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+          })
+          .catch(err => showError('Zip or download failed: ' + err));
+      }
+    });
+  </script>
+</body>
+</html>
