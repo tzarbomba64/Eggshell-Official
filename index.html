@@ -7,29 +7,10 @@
   <style>
     body { background-color: #000; color: #fff; font-family: sans-serif; padding: 2rem; line-height: 1.6; }
     h2 { color: #00aaff; margin-top: 2rem; }
-    .download-btn {
-      display: inline-flex;
-      align-items: center;
-      background-color: #00aaff;
-      color: #fff;
-      padding: 0.5em 1em;
-      border: none;
-      border-radius: 4px;
-      margin: 0.5em;
-      cursor: pointer;
-      font-size: 0.9rem;
-      text-decoration: none;
-    }
+    .download-btn { display: inline-flex; align-items: center; background-color: #00aaff; color: #fff; padding: 0.5em 1em; border: none; border-radius: 4px; margin: 0.5em; cursor: pointer; font-size: 0.9rem; text-decoration: none; }
     .download-btn img { width: 20px; height: 20px; margin-right: 8px; }
     .download-btn:hover { background-color: #0088cc; }
-    .error {
-      margin-top: 2rem;
-      padding: 1rem;
-      background-color: #330000;
-      border: 1px solid #ff0000;
-      border-radius: 4px;
-      color: #ff5555;
-    }
+    .error { margin-top: 2rem; padding: 1rem; background-color: #330000; border: 1px solid #ff0000; border-radius: 4px; color: #ff5555; }
   </style>
 </head>
 <body>
@@ -47,18 +28,13 @@
       const repo = 'Eggshell-Official';
       const branch = 'main';
       const readmeUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/README.md`;
-      const listApiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/list?ref=${branch}`;
+      const listUrl = `https://api.github.com/repos/${owner}/${repo}/contents/list?ref=${branch}`;
       const winLogoUrl = 'https://i.postimg.cc/2jJkfTC9/download.png';
 
       const contentEl = document.getElementById('content');
       const downloadsEl = document.getElementById('downloads');
       const errorEl = document.getElementById('error');
-
-      function showError(msg) {
-        errorEl.style.display = 'block';
-        errorEl.textContent = msg;
-        console.error(msg);
-      }
+      function showError(msg) { errorEl.style.display = 'block'; errorEl.textContent = msg; console.error(msg); }
 
       // Load README
       fetch(readmeUrl)
@@ -66,70 +42,89 @@
         .then(md => contentEl.innerHTML = marked.parse(md))
         .catch(err => showError('Failed to load README: ' + err));
 
-      // Fetch list folder and prepare buttons
-      fetch(listApiUrl, { headers: { 'Accept': 'application/vnd.github.v3+json' } })
+      // Load list folder items
+      fetch(listUrl, { headers: { 'Accept': 'application/vnd.github.v3+json' } })
         .then(res => res.ok ? res.json() : Promise.reject(res.status))
         .then(items => {
-          // Only include files in 'list' folder
-          const files = items.filter(item => item.type === 'file');
-
-          // Split into installers (containing 'base') and normal zips
-          const installers = files.filter(item => item.name.toLowerCase().includes('base'));
-          const normal = files.filter(item => !item.name.toLowerCase().includes('base'));
-
-          // Create zip download buttons for normal files
-          normal.forEach(item => {
-            const label = item.name.replace(/\.[^/.]+$/, '');
-            const btn = document.createElement('button');
-            btn.className = 'download-btn';
-            btn.textContent = `Download ${label}.zip`;
-            btn.onclick = () => zipAndDownload(item);
-            downloadsEl.appendChild(btn);
-          });
-
-          // Create direct download buttons for installers
-          installers.forEach(item => {
-            const label = item.name.replace(/\.[^/.]+$/, '');
-            const btn = document.createElement('button');
-            btn.className = 'download-btn';
-            btn.innerHTML = `<img src="${winLogoUrl}" alt="Windows logo">Download ${label}`;
-            btn.onclick = () => downloadDirect(item);
-            downloadsEl.appendChild(btn);
+          items.forEach(item => {
+            const nameLower = item.name.toLowerCase();
+            // Installer: any file with 'base' in name, or any dir named 'base'
+            if ((item.type === 'file' && nameLower.includes('base')) || (item.type === 'dir' && nameLower.includes('base'))) {
+              if (item.type === 'file') {
+                createInstallerButton(item.download_url, item.name);
+              } else {
+                // directory: fetch inside and find first file with 'base' in name
+                fetch(item.url, { headers: { 'Accept': 'application/vnd.github.v3+json' } })
+                  .then(res => res.ok ? res.json() : Promise.reject(res.status))
+                  .then(children => {
+                    const target = children.find(child => child.name.toLowerCase().includes('base') && child.type === 'file');
+                    if (target) createInstallerButton(target.download_url, target.name);
+                  })
+                  .catch(err => showError('Failed to load installer contents: ' + err));
+              }
+            } else if (item.type === 'file') {
+              // Normal file: zip and download
+              createZipButton(item);
+            } else if (item.type === 'dir') {
+              // Optional: zip entire directory
+              createZipButton(item);
+            }
           });
         })
         .catch(err => showError('Failed to load downloads: ' + err));
 
-      // Zip download logic for single files
+      function createInstallerButton(url, filename) {
+        const label = filename.replace(/\.[^/.]+$/, '');
+        const btn = document.createElement('button');
+        btn.className = 'download-btn';
+        btn.innerHTML = `<img src="${winLogoUrl}" alt="Win">Download ${label}`;
+        btn.onclick = () => directDownload(url, filename);
+        downloadsEl.appendChild(btn);
+      }
+
+      function createZipButton(item) {
+        const label = item.name.replace(/\.[^/.]+$/, '');
+        const btn = document.createElement('button');
+        btn.className = 'download-btn';
+        btn.textContent = `Download ${label}.zip`;
+        btn.onclick = () => zipAndDownload(item);
+        downloadsEl.appendChild(btn);
+      }
+
+      function directDownload(url, name) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click(); a.remove();
+      }
+
       function zipAndDownload(item) {
         const zip = new JSZip();
-        fetch(item.download_url)
-          .then(res => res.ok ? res.blob() : Promise.reject(res.status))
-          .then(blob => {
-            zip.file(item.name, blob);
-            return zip.generateAsync({ type: 'blob', mimeType: 'application/zip' });
-          })
+        function add(item, path = '') {
+          if (item.type === 'file') {
+            return fetch(item.download_url)
+              .then(r => r.ok ? r.blob() : Promise.reject(r.status))
+              .then(blob => zip.file(path + item.name, blob));
+          } else if (item.type === 'dir') {
+            const folder = zip.folder(item.name);
+            return fetch(item.url, { headers: { 'Accept': 'application/vnd.github.v3+json' } })
+              .then(r => r.ok ? r.json() : Promise.reject(r.status))
+              .then(children => Promise.all(children.map(child => add(child, item.name + '/'))));
+          }
+        }
+        add(item)
+          .then(() => zip.generateAsync({ type: 'blob' }))
           .then(blob => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            const name = item.name.replace(/\.[^/.]+$/, '');
-            a.download = `${name}.zip`;
+            a.download = `${item.name.replace(/\.[^/.]+$/, '')}.zip`;
             document.body.appendChild(a);
-            a.click();
-            a.remove();
+            a.click(); a.remove();
             setTimeout(() => URL.revokeObjectURL(url), 10000);
           })
-          .catch(err => showError('Zip or download failed: ' + err));
-      }
-
-      // Direct download for installer files
-      function downloadDirect(item) {
-        const a = document.createElement('a');
-        a.href = item.download_url;
-        a.download = item.name;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+          .catch(err => showError('Zip failed: ' + err));
       }
     });
   </script>
