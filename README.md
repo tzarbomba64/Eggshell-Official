@@ -12,4 +12,4 @@ Has few pre-installed commands. To add commands:
 1. To see extended logging for testing EGG files, run 'debug'.
 2. ALways make sure commands line up with function names properly in EGG files
 
-# Filea
+# Files
