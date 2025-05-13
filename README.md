@@ -10,6 +10,9 @@ Has few pre-installed commands. To add commands:
 
 # Tips and Tricks
 1. To see extended logging for testing EGG files, run 'debug'.
-2. ALways make sure commands line up with function names properly in EGG files
+2. Always make sure commands line up with function names properly in EGG files
 
+# Extra info
+Eggshell is designed to be influenced by the community, no special process, no annoying protocols.
+Designed to be designed.
 # Files
