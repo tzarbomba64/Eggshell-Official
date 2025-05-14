@@ -12,7 +12,8 @@ Has few pre-installed commands. To add commands:
 1. To see extended logging for testing EGG files, run 'debug'.
 2. Always make sure commands line up with function names properly in EGG files
 
-# Extra info
+# Ideals
 Eggshell is designed to be influenced by the community, no special process, no annoying protocols.
 Designed to be designed.
+https://github.com/tzarbomba64/Eggshell-Official/blob/main/info.md
 # Files
